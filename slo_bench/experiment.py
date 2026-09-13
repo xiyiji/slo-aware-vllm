@@ -44,6 +44,8 @@ def main():
     p.add_argument("--rate", type=float, default=2)
     p.add_argument("--seeds", default="17")
     args = p.parse_args()
+    from huggingface_hub import snapshot_download
+    revision = Path(snapshot_download("Qwen/Qwen2.5-7B-Instruct", local_files_only=True)).name
     with socket.socket() as probe:
         probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         probe.bind(("127.0.0.1", 18001))  # fail before launch if another service owns the port
@@ -54,7 +56,8 @@ def main():
                "--dtype", "bfloat16", "--max-model-len", "4096", "--gpu-memory-utilization", "0.9",
                "--max-num-seqs", str(args.seqs), "--max-num-batched-tokens", str(args.tokens),
                "--no-enable-prefix-caching", "--enable-chunked-prefill", "--seed", "17"]
-    environment = {"python": platform.python_version(), "command": command,
+    command += ["--revision", revision]
+    environment = {"python": platform.python_version(), "command": command, "model_revision": revision,
                    "git_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
                    "packages": subprocess.check_output([sys.executable, "-m", "pip", "freeze"], text=True),
                    "gpu": subprocess.check_output(["nvidia-smi", "--query-gpu=name,uuid,driver_version,memory.total", "--format=csv"], text=True)}

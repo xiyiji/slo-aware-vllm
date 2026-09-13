@@ -24,6 +24,9 @@ def choose(paths):
 
 def main():
     root = Path("results")
+    for seq in (8,16,32,64):
+        if not (root / f"screen-s{seq}-t4096/seed-17/summary.json").exists():
+            raise RuntimeError(f"Screening incomplete: missing sequence limit {seq}")
     chosen_seq = choose(root.glob("screen-s*-t4096/seed-17/summary.json"))["seqs"]
     subprocess.run([sys.executable, "-m", "slo_bench.sweep", "--seqs", str(chosen_seq),
                     "--tokens", "2048,8192", "--prefix", "budget"], check=True)
