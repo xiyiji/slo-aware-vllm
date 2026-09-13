@@ -47,8 +47,10 @@ def main():
     args = p.parse_args()
     if importlib.metadata.version("vllm") != "0.29.0":
         raise RuntimeError("This experiment pins vLLM 0.29.0; use a separate protocol for another runtime")
-    from huggingface_hub import snapshot_download
-    revision = Path(snapshot_download("Qwen/Qwen2.5-7B-Instruct", local_files_only=True)).name
+    from huggingface_hub import hf_hub_download
+    # vLLM caches required model files, not necessarily README/LICENSE or every repository asset.
+    # The cached config path preserves snapshots/<commit>/config.json without resolving its blob symlink.
+    revision = Path(hf_hub_download("Qwen/Qwen2.5-7B-Instruct", "config.json", local_files_only=True)).parent.name
     with socket.socket() as probe:
         probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         probe.bind(("127.0.0.1", 18001))  # fail before launch if another service owns the port
