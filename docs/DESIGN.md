@@ -4,6 +4,8 @@
 
 Choose a scheduler configuration that maximizes successful requests per second satisfying a **predeclared per-request** latency SLO, on one RTX 4090 and Qwen2.5-7B-Instruct. This is a controlled single-GPU experiment, not a claim of production-scale availability or a new scheduling algorithm. The contribution is measurement correctness, reproducibility, constrained configuration selection and operational integration.
 
+"SLO-aware" describes the offline selection objective, not a new online adaptive scheduler. A sequence-limit128 reference is included because the existing application was already batched; gains over the serial limit1 must not be represented as gains over that existing configuration.
+
 ## Architecture
 
 ```mermaid
@@ -36,8 +38,10 @@ H1: Increasing `max_num_seqs` from 1 improves throughput under equal offered loa
 - Screening candidates: sequence limits 1,8,16,32,64; token budgets 2048,4096,8192. Use a bounded first pass, record any untested cells rather than imply full grid coverage.
 - Same arrival rate and request count across candidates; no client semaphore concealing overload. Arrivals use a seeded Poisson process. Record client dispatch lateness.
 - Warm up separately; initialization/compilation excluded. Screening is exploratory. Freeze a selected candidate, then run baseline and selected configurations at least three independent repetitions. Pair seeds and alternate configuration order where practical. Report each repeat and aggregate; small-sample tail percentiles are descriptive, not robust production estimates.
+- Formal protocol refinement: three warmup rounds of eight concurrent requests cover batching shapes (initial exploratory screens used three sequential requests). Formal runs use paired seeds101/102/103,128 requests each. Runs are grouped by configuration to reduce model startup cost; temporal/thermal confounding remains a stated limitation. Include the128-sequence reference under the same controls.
 - Initial SLO: TTFT ≤ 1 second AND E2E ≤ 10 seconds. Timeout 60 seconds. Screening arrival rate 2 requests/s, formal rate fixed before formal runs. Do not retune SLO after looking at results.
 - GPU is rented; cap initial screening to five sequence candidates at token budget 4096, then two extra budgets for the strongest sequence candidate. Full 15-cell sweep remains available but is not required to claim the tested comparison.
+- Freeze the smallest error-free configuration within5% of maximum observed goodput. This tolerance avoids treating tiny run-to-run differences as a decisive optimum. The token-budget stage is exploratory; all formal arms use the same final measurement implementation.
 
 ## Measurement contract
 
