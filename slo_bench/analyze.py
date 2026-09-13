@@ -65,13 +65,23 @@ def main():
         writer.writerows(rows)
     formal = [r for r in rows if "formal" in r["run"]]
     plotted = formal or rows
-    labels = [r["run"].replace("formal-", "") for r in plotted]
+    groups = {}
+    for row in plotted:
+        groups.setdefault(row["run"].split("/")[0], []).append(row)
+    labels = [name.replace("formal-", "") for name in groups]
     fig, axes = plt.subplots(1, 3, figsize=(15, 5), layout="constrained")
     for ax, metric, title in zip(axes, ["output_tokens_s", "goodput_rps", "p95_ttft_s"],
                                  ["Exact output tokens / s", "SLO goodput (requests / s)", "p95 TTFT (seconds)"]):
-        ax.bar(range(len(plotted)), [r[metric] for r in plotted], color=["#64748b" if r["seqs"] == 1 else "#2563eb" for r in plotted])
+        values = [[r[metric] for r in group] for group in groups.values()]
+        ax.bar(range(len(groups)), [np.mean(v) for v in values], color=["#64748b", "#2563eb", "#8b5cf6"][:len(groups)] if len(groups) <= 3 else "#2563eb")
+        for i, samples in enumerate(values):
+            ax.scatter([i]*len(samples), samples, color="#111827", s=15, zorder=3)
         ax.set_xticks(range(len(labels)), labels, rotation=60, ha="right", fontsize=8)
         ax.set_title(title)
+        if metric == "p95_ttft_s":
+            ax.set_yscale("log")
+            ax.axhline(1, color="#dc2626", linestyle="--", linewidth=1, label="TTFT SLO")
+            ax.legend(fontsize=8)
         ax.spines[["top", "right"]].set_visible(False)
     fig.suptitle("RTX 4090 · Qwen2.5-7B · fixed 256 / 128 token workload")
     fig.savefig(root / "comparison.png", dpi=160)
@@ -81,6 +91,23 @@ def main():
         gpu = f'{r["gpu_mean_pct"]:.1f}' if r["gpu_mean_pct"] is not None else "unavailable"
         lines.append(f'| {r["run"]} | {r["seqs"]} | {r["token_budget"]} | {r["succeeded"]}/{r["attempted"]} | {r["output_tokens_s"]:.2f} | {r["goodput_rps"]:.3f} | {r["p95_ttft_s"]:.3f} | {r["p95_e2e_s"]:.3f} | {gpu} |')
     lines += ["", "![Measured comparison](comparison.png)", "", "Percentiles on small samples are descriptive. TPOT is a client-observed per-request average, not an inter-token histogram. Missing GPU/KV metrics are not zero."]
+    if formal:
+        aggregates = {name: {metric: {"mean":float(np.mean([r[metric] for r in group])),
+                                     "min":min(r[metric] for r in group), "max":max(r[metric] for r in group)}
+                             for metric in ("output_tokens_s", "goodput_rps", "p95_ttft_s", "p95_e2e_s")}
+                      for name, group in groups.items()}
+        (root / "formal-aggregates.json").write_text(json.dumps(aggregates, indent=2))
+        lines += ["", "## Formal repeat means", "", "Bars show means; dots show individual repeats. Grouped execution order can confound thermal/time effects. Three repeats do not establish production tail guarantees.", ""]
+        for name, metrics in aggregates.items():
+            lines.append(f'- {name}: {metrics["output_tokens_s"]["mean"]:.2f} tokens/s; {metrics["goodput_rps"]["mean"]:.3f} good requests/s; mean per-run p95 TTFT {metrics["p95_ttft_s"]["mean"]:.3f}s.')
+        selected = aggregates.get("formal-selected")
+        if selected:
+            for reference in ("formal-baseline", "formal-reference128"):
+                if reference in aggregates:
+                    base = aggregates[reference]["output_tokens_s"]["mean"]
+                    delta = (selected["output_tokens_s"]["mean"]/base-1)*100 if base else None
+                    lines.append(f'- Selected output-throughput change versus {reference}: {delta:.2f}%.' if delta is not None else f'- {reference} has zero throughput; percentage undefined.')
+        lines += ["", "The sequence-limit-1 baseline is deliberately serial. Its improvement is not an improvement over the original 128-sequence integration. Inspect the 128 reference separately before making any incremental tuning claim."]
     (root / "REPORT.md").write_text("\n".join(lines)+"\n")
     print(f"Validated and plotted {len(rows)} runs")
 
