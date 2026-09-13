@@ -1,6 +1,7 @@
 """One bounded candidate: isolated loopback server, telemetry, guaranteed cleanup."""
 import argparse
 import json
+import importlib.metadata
 import os
 from pathlib import Path
 import platform
@@ -44,6 +45,8 @@ def main():
     p.add_argument("--rate", type=float, default=2)
     p.add_argument("--seeds", default="17")
     args = p.parse_args()
+    if importlib.metadata.version("vllm") != "0.29.0":
+        raise RuntimeError("This experiment pins vLLM 0.29.0; use a separate protocol for another runtime")
     from huggingface_hub import snapshot_download
     revision = Path(snapshot_download("Qwen/Qwen2.5-7B-Instruct", local_files_only=True)).name
     with socket.socket() as probe:

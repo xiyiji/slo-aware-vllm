@@ -35,3 +35,18 @@ def test_goodput_counts_failures_and_both_slos():
     assert s["goodput_rps"] == .1
     assert s["output_tokens_s"] == 2
     assert s["errors"] == 1
+
+
+def test_wrong_token_count_is_not_a_success():
+    m = StreamMeasurement()
+    m.consume('{"choices":[{"text":"hi","finish_reason":"stop"}],"usage":{"prompt_tokens":2,"completion_tokens":1}}', .1)
+    m.consume('[DONE]', .2)
+    with pytest.raises(ValueError, match='Expected'):
+        m.result(128)
+    assert m.result(1)['tpot_s'] is None
+
+
+def test_server_error_is_not_content():
+    m = StreamMeasurement()
+    with pytest.raises(ValueError):
+        m.consume('{"error":{"message":"out of memory"}}', 1)

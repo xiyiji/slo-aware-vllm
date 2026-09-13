@@ -1,0 +1,12 @@
+[
+  {"image":"frame-000.png","narration":"这是简化后的模型服务平台。首页只保留两个入口：聊天，以及管理控制台。"},
+  {"image":"chat-ready.png","narration":"打开聊天页面，不需要先填写复杂参数。选择示例问题，或者直接输入消息。高级配置默认收起。"},
+  {"image":"chat-answer.png","narration":"这是真实模型返回的回答。请求经过网页和网关，到达远程 GPU，再把生成结果返回浏览器。"},
+  {"image":"frame-001.png","narration":"管理页面先显示网关状态。这里的健康状态，不等于 GPU 一定在线。"},
+  {"image":"frame-003.png","narration":"展开模型操作，填写模型名称和版本，点击注册。页面显示注册成功。"},
+  {"image":"frame-004.png","narration":"选择 staging 阶段，再点击 Promote。这里更新的是模型版本的治理记录。"},
+  {"image":"frame-005.png","narration":"Load 和 Unload 管理网关的预热池记录，不会直接分配或释放 GPU 显存。"},
+  {"image":"frame-006.png","narration":"卸载操作也已执行成功。四种管理操作都经过实际页面验证。"},
+  {"image":"ci-final.png","narration":"代码提交后，GitHub 自动检查后端测试、前端构建、容器构建和基础设施配置。这里展示的是成功的运行记录。"},
+  {"image":"../../results/comparison.png","narration":"第二阶段在独立仓库比较调度参数，保留原始数据和重复实验。视频由真实操作截图剪辑，播放速度不代表模型延迟。"}
+]
