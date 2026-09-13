@@ -32,9 +32,9 @@ def main():
     chosen = choose(candidates)
     chosen.update({"formal_seeds": [101,102,103], "formal_requests":128,
                    "selection_rule":"zero errors; within 5% of max goodput; prefer smaller seqs then budget",
-                   "order":"three baseline runs then three selected runs; grouped to limit rented-GPU startup cost"})
+                   "order":"three baseline, three selected, three sequence-limit-128 reference runs; grouped to limit rented-GPU startup cost"})
     (root / "selection.json").write_text(json.dumps(chosen, indent=2))
-    for seq, tokens, label in [(1,4096,"baseline"), (chosen["seqs"],chosen["tokens"],"selected")]:
+    for seq, tokens, label in [(1,4096,"baseline"), (chosen["seqs"],chosen["tokens"],"selected"), (128,4096,"reference128")]:
         subprocess.run([sys.executable, "-m", "slo_bench.experiment", "--seqs", str(seq), "--tokens", str(tokens),
                         "--requests", "128", "--seeds", "101,102,103", "--output", f"results/formal-{label}"], check=True)
     subprocess.run([sys.executable, "-m", "slo_bench.analyze"], check=True)
