@@ -96,9 +96,11 @@ async def run(args):
             return result
 
         for i in range(args.warmup):
-            warm = await request(-1, prompts[i % len(prompts)], time.perf_counter())
-            if not warm["ok"]:
-                raise RuntimeError(f"Warmup failed: {warm}")
+            warmed = await asyncio.gather(*(request(-1, prompts[(i+j) % len(prompts)], time.perf_counter())
+                                           for j in range(args.warmup_concurrency)))
+            for warm in warmed:
+                if not warm["ok"]:
+                    raise RuntimeError(f"Warmup failed: {warm}")
         async def metrics():
             try:
                 response = await client.get(args.base + "/metrics")
@@ -143,11 +145,12 @@ def main():
     p.add_argument("--input-tokens", type=int, default=256)
     p.add_argument("--output-tokens", type=int, default=128)
     p.add_argument("--warmup", type=int, default=3)
+    p.add_argument("--warmup-concurrency", type=int, default=8)
     p.add_argument("--timeout", type=float, default=60)
     p.add_argument("--ttft-slo", type=float, default=1)
     p.add_argument("--e2e-slo", type=float, default=10)
     args = p.parse_args()
-    if min(args.requests, args.rate, args.input_tokens, args.output_tokens, args.timeout) <= 0:
+    if min(args.requests, args.rate, args.input_tokens, args.output_tokens, args.timeout, args.warmup_concurrency) <= 0:
         p.error("counts, rate and timeout must be positive")
     if (Path(args.output) / "requests.jsonl").exists():
         p.error("output already contains records; choose a fresh run directory")
