@@ -4,6 +4,9 @@ import csv
 import json
 from pathlib import Path
 import re
+import math
+
+from .measure import summarize
 
 import matplotlib
 matplotlib.use("Agg")
@@ -17,6 +20,10 @@ def read_counter(path, name):
         if line.startswith(name + "{") or line.startswith(name + " "):
             values.append(float(line.rsplit(" ", 1)[1]))
     return sum(values) if values else None
+
+
+def fmt(value, digits=3):
+    return f"{value:.{digits}f}" if value is not None else "unavailable"
 
 
 def main():
@@ -35,6 +42,16 @@ def main():
         records = [json.loads(line) for line in (path.parent / "requests.jsonl").read_text().splitlines()]
         if len(records) != summary["attempted"]:
             raise ValueError(f"Record count mismatch: {path}")
+        manifest = json.loads((path.parent / "manifest.json").read_text())
+        if {r["index"] for r in records} != set(range(manifest["requests"])):
+            raise ValueError(f"Missing or duplicate request index: {path}")
+        recomputed = summarize(records, summary["wall_s"], manifest["ttft_slo"], manifest["e2e_slo"])
+        for key, value in recomputed.items():
+            if value is None:
+                if summary[key] is not None:
+                    raise ValueError(f"Summary mismatch {key}: {path}")
+            elif not math.isclose(value, summary[key], rel_tol=1e-8, abs_tol=1e-8):
+                raise ValueError(f"Summary mismatch {key}: {path}")
         telemetry = path.parent.parent / "telemetry.jsonl"
         gpu, kv = [], []
         if telemetry.exists() and "measured_start_unix" in summary:
@@ -72,13 +89,13 @@ def main():
     fig, axes = plt.subplots(1, 3, figsize=(15, 5), layout="constrained")
     for ax, metric, title in zip(axes, ["output_tokens_s", "goodput_rps", "p95_ttft_s"],
                                  ["Exact output tokens / s", "SLO goodput (requests / s)", "p95 TTFT (seconds)"]):
-        values = [[r[metric] for r in group] for group in groups.values()]
-        ax.bar(range(len(groups)), [np.mean(v) for v in values], color=["#64748b", "#2563eb", "#8b5cf6"][:len(groups)] if len(groups) <= 3 else "#2563eb")
+        values = [[r[metric] for r in group if r[metric] is not None] for group in groups.values()]
+        ax.bar(range(len(groups)), [np.mean(v) if v else float('nan') for v in values], color=["#64748b", "#2563eb", "#8b5cf6"][:len(groups)] if len(groups) <= 3 else "#2563eb")
         for i, samples in enumerate(values):
             ax.scatter([i]*len(samples), samples, color="#111827", s=15, zorder=3)
         ax.set_xticks(range(len(labels)), labels, rotation=60, ha="right", fontsize=8)
         ax.set_title(title)
-        if metric == "p95_ttft_s":
+        if metric == "p95_ttft_s" and any(v for v in values):
             ax.set_yscale("log")
             ax.axhline(1, color="#dc2626", linestyle="--", linewidth=1, label="TTFT SLO")
             ax.legend(fontsize=8)
@@ -89,17 +106,19 @@ def main():
              "| Run | Seqs | Budget | Success / attempted | Tokens/s | Goodput | p95 TTFT s | p95 E2E s | GPU mean % |", "|---|---:|---:|---:|---:|---:|---:|---:|---:|"]
     for r in rows:
         gpu = f'{r["gpu_mean_pct"]:.1f}' if r["gpu_mean_pct"] is not None else "unavailable"
-        lines.append(f'| {r["run"]} | {r["seqs"]} | {r["token_budget"]} | {r["succeeded"]}/{r["attempted"]} | {r["output_tokens_s"]:.2f} | {r["goodput_rps"]:.3f} | {r["p95_ttft_s"]:.3f} | {r["p95_e2e_s"]:.3f} | {gpu} |')
+        lines.append(f'| {r["run"]} | {r["seqs"]} | {r["token_budget"]} | {r["succeeded"]}/{r["attempted"]} | {r["output_tokens_s"]:.2f} | {r["goodput_rps"]:.3f} | {fmt(r["p95_ttft_s"])} | {fmt(r["p95_e2e_s"])} | {gpu} |')
     lines += ["", "![Measured comparison](comparison.png)", "", "Percentiles on small samples are descriptive. TPOT is a client-observed per-request average, not an inter-token histogram. Missing GPU/KV metrics are not zero."]
     if formal:
-        aggregates = {name: {metric: {"mean":float(np.mean([r[metric] for r in group])),
-                                     "min":min(r[metric] for r in group), "max":max(r[metric] for r in group)}
+        def aggregate(values):
+            values = [v for v in values if v is not None]
+            return {"mean":float(np.mean(values)), "min":min(values), "max":max(values)} if values else {"mean":None,"min":None,"max":None}
+        aggregates = {name: {metric: aggregate([r[metric] for r in group])
                              for metric in ("output_tokens_s", "goodput_rps", "p95_ttft_s", "p95_e2e_s")}
                       for name, group in groups.items()}
         (root / "formal-aggregates.json").write_text(json.dumps(aggregates, indent=2))
         lines += ["", "## Formal repeat means", "", "Bars show means; dots show individual repeats. Grouped execution order can confound thermal/time effects. Three repeats do not establish production tail guarantees.", ""]
         for name, metrics in aggregates.items():
-            lines.append(f'- {name}: {metrics["output_tokens_s"]["mean"]:.2f} tokens/s; {metrics["goodput_rps"]["mean"]:.3f} good requests/s; mean per-run p95 TTFT {metrics["p95_ttft_s"]["mean"]:.3f}s.')
+            lines.append(f'- {name}: {fmt(metrics["output_tokens_s"]["mean"],2)} tokens/s; {fmt(metrics["goodput_rps"]["mean"])} good requests/s; mean per-run p95 TTFT {fmt(metrics["p95_ttft_s"]["mean"])}s.')
         selected = aggregates.get("formal-selected")
         if selected:
             for reference in ("formal-baseline", "formal-reference128"):
