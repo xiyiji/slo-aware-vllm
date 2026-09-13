@@ -6,7 +6,9 @@ Controlled single-RTX-4090 experiments: select vLLM scheduler settings using lat
 
 **Status: implementation and experiments in progress. No improvement claim yet.**
 
-- [Full design and measurement contract](docs/DESIGN.md)
+- [完整中文设计文档](docs/DESIGN.zh-CN.md)
+- [English design and measurement contract](docs/DESIGN.md)
+- [Operations, recovery and evidence boundaries](docs/OPERATIONS.md)
 - Exact server token counts; missing usage fails the run contract.
 - Seeded open-loop arrivals, per-request JSONL, raw engine and GPU telemetry.
 - Serial-sequence baseline vs engine continuous batching; no gateway cache confound.
@@ -32,6 +34,21 @@ python -m slo_bench.experiment --seqs 16 --tokens 4096 --requests 64 --output re
 python -m slo_bench.experiment --seqs 1 --seeds 101,102,103 --requests 128 --output results/formal-baseline
 ```
 
+For a fresh end-to-end study, use `python -m slo_bench.sweep` followed by
+`python -m slo_bench.finalize`. The latter checks screening completeness, evaluates
+two additional token budgets, freezes the selection, and runs three paired-seed
+trials each for the serial baseline, selected configuration and sequence-limit128
+reference. It does not stop or provision a cloud Pod. Allow for repeated model
+loading, and use a persistent terminal/process supervisor.
+
 Same 256 input / 128 exact output tokens, 2 requests/s, SLO TTFT ≤1s and E2E ≤10s. `max_num_seqs=1` is not a claim that all GPU batching/optimizations are disabled. Results apply only to the recorded synthetic workload and runtime.
+
+Formal warmup is three rounds of eight concurrent requests. Initial exploratory
+screens used three sequential warmups; see the recorded method changes. Formal
+repetitions are grouped by configuration to limit rented-GPU startup cost, so
+time/thermal drift is a limitation, not a controlled factor.
+
+The 128-sequence reference matters: an improvement over a deliberately serial
+baseline does **not** establish an improvement over an existing batched service.
 
 The separate [serving console](https://github.com/xiyiji/llm-serving-platform) and [Ray/vLLM integration](https://github.com/xiyiji/InferenceGateway) demonstrate application integration; they are not included in this local engine benchmark's timing.
