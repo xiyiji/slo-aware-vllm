@@ -45,6 +45,7 @@ def main():
     p.add_argument("--seeds", default="17")
     args = p.parse_args()
     with socket.socket() as probe:
+        probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         probe.bind(("127.0.0.1", 18001))  # fail before launch if another service owns the port
     root = Path(args.output)
     root.mkdir(parents=True, exist_ok=False)

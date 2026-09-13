@@ -80,7 +80,7 @@ async def run(args):
                        "temperature": 0, "seed": args.seed, "ignore_eos": True, "stream": True,
                        "stream_options": {"include_usage": True}}
             try:
-                async with client.stream("POST", args.base + "/v1/completions", json=payload) as response:
+                async with asyncio.timeout(args.timeout), client.stream("POST", args.base + "/v1/completions", json=payload) as response:
                     response.raise_for_status()
                     async for line in response.aiter_lines():
                         if line.startswith("data:"):
