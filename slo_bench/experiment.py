@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import platform
 import signal
+import socket
 import subprocess
 import sys
 import threading
@@ -23,7 +24,7 @@ def sample(root, stop):
             except Exception as exc:
                 item["gpu_error"] = type(exc).__name__
             try:
-                with urllib.request.urlopen("http://127.0.0.1:8001/metrics", timeout=3) as response:
+                with urllib.request.urlopen("http://127.0.0.1:18001/metrics", timeout=3) as response:
                     item["metrics"] = [line for line in response.read().decode().splitlines()
                                        if not line.startswith("#") and any(k in line for k in
                                        ("kv_cache_usage", "gpu_cache_usage", "num_preemptions", "num_requests_running", "num_requests_waiting"))]
@@ -43,10 +44,12 @@ def main():
     p.add_argument("--rate", type=float, default=2)
     p.add_argument("--seeds", default="17")
     args = p.parse_args()
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 18001))  # fail before launch if another service owns the port
     root = Path(args.output)
     root.mkdir(parents=True, exist_ok=False)
     command = [sys.executable, "-m", "vllm.entrypoints.openai.api_server",
-               "--model", "Qwen/Qwen2.5-7B-Instruct", "--host", "127.0.0.1", "--port", "8001",
+               "--model", "Qwen/Qwen2.5-7B-Instruct", "--host", "127.0.0.1", "--port", "18001",
                "--dtype", "bfloat16", "--max-model-len", "4096", "--gpu-memory-utilization", "0.9",
                "--max-num-seqs", str(args.seqs), "--max-num-batched-tokens", str(args.tokens),
                "--no-enable-prefix-caching", "--enable-chunked-prefill", "--seed", "17"]
@@ -65,7 +68,7 @@ def main():
                 if server.poll() is not None:
                     raise RuntimeError("Server exited; inspect server.log")
                 try:
-                    with urllib.request.urlopen("http://127.0.0.1:8001/health", timeout=2) as r:
+                    with urllib.request.urlopen("http://127.0.0.1:18001/health", timeout=2) as r:
                         if r.status == 200:
                             break
                 except Exception:

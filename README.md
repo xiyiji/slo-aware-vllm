@@ -22,7 +22,7 @@ pytest -q
 
 ## GPU experiment
 
-Use a dedicated RTX 4090 with vLLM **0.29.0** installed. The command starts an isolated server on loopback port 8001 and stops only its own process group. First free the GPU by gracefully stopping any existing model deployment. Do not run alongside a second 7B engine.
+Use a dedicated RTX 4090 with vLLM **0.29.0** installed. The command starts an isolated server on loopback port 18001 and stops only its own process group. First free the GPU by gracefully stopping any existing model deployment. Do not run alongside a second 7B engine.
 
 ```bash
 pip install -e .

@@ -130,7 +130,7 @@ async def run(args):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--base", default="http://127.0.0.1:8001")
+    p.add_argument("--base", default="http://127.0.0.1:18001")
     p.add_argument("--model", default="Qwen/Qwen2.5-7B-Instruct")
     p.add_argument("--output", required=True)
     p.add_argument("--requests", type=int, default=64)
