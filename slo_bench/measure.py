@@ -106,6 +106,7 @@ async def run(args):
             except Exception as exc:
                 return f"# unavailable: {type(exc).__name__}\n"
         (root / "metrics-before.prom").write_text(await metrics())
+        measured_start_unix = time.time()
         start = time.perf_counter()
         offsets = []
         offset = 0.0
@@ -122,8 +123,10 @@ async def run(args):
                 out.write(json.dumps(result) + "\n")
         await asyncio.gather(*(scheduled_request(i, p) for i, p in enumerate(prompts)))
         wall = time.perf_counter()-start
+        measured_end_unix = time.time()
         (root / "metrics-after.prom").write_text(await metrics())
     summary = summarize(records, wall, args.ttft_slo, args.e2e_slo)
+    summary.update(measured_start_unix=measured_start_unix, measured_end_unix=measured_end_unix)
     (root / "summary.json").write_text(json.dumps(summary, indent=2))
     print(json.dumps(summary), flush=True)
 
