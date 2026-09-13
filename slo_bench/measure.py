@@ -68,7 +68,8 @@ async def run(args):
     # Printable token IDs from the tokenizer vocabulary, not natural-language quality prompts.
     prompts = [[rng.randrange(100, 10000) for _ in range(args.input_tokens)] for _ in range(args.requests)]
     digest = hashlib.sha256(json.dumps(prompts, separators=(",", ":")).encode()).hexdigest()
-    manifest = vars(args) | {"workload_sha256": digest, "started_unix": time.time(), "clock": "perf_counter"}
+    manifest = vars(args) | {"workload_sha256": digest, "started_unix": time.time(), "clock": "perf_counter",
+                             "measurement_code_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest()}
     (root / "manifest.json").write_text(json.dumps(manifest, indent=2))
     records = []
     async with httpx.AsyncClient(timeout=args.timeout, limits=httpx.Limits(max_connections=1024)) as client:
