@@ -44,6 +44,10 @@ def main():
     p.add_argument("--requests", type=int, default=64)
     p.add_argument("--rate", type=float, default=2)
     p.add_argument("--seeds", default="17")
+    p.add_argument("--scheduling-policy", choices=("fcfs", "priority"), default="fcfs")
+    p.add_argument("--no-chunked-prefill", action="store_true")
+    p.add_argument("--gpu-memory-utilization", type=float, default=0.9)
+    p.add_argument("--measure-args", default="", help="extra arguments passed verbatim to slo_bench.measure")
     args = p.parse_args()
     if importlib.metadata.version("vllm") != "0.29.0":
         raise RuntimeError("This experiment pins vLLM 0.29.0; use a separate protocol for another runtime")
@@ -58,9 +62,12 @@ def main():
     root.mkdir(parents=True, exist_ok=False)
     command = [sys.executable, "-m", "vllm.entrypoints.openai.api_server",
                "--model", "Qwen/Qwen2.5-7B-Instruct", "--host", "127.0.0.1", "--port", "18001",
-               "--dtype", "bfloat16", "--max-model-len", "4096", "--gpu-memory-utilization", "0.9",
+               "--dtype", "bfloat16", "--max-model-len", "4096",
+               "--gpu-memory-utilization", str(args.gpu_memory_utilization),
                "--max-num-seqs", str(args.seqs), "--max-num-batched-tokens", str(args.tokens),
-               "--no-enable-prefix-caching", "--enable-chunked-prefill", "--seed", "17"]
+               "--no-enable-prefix-caching",
+               "--no-enable-chunked-prefill" if args.no_chunked_prefill else "--enable-chunked-prefill",
+               "--scheduling-policy", args.scheduling_policy, "--seed", "17"]
     command += ["--revision", revision]
     environment = {"python": platform.python_version(), "command": command, "model_revision": revision,
                    "git_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
@@ -85,12 +92,13 @@ def main():
                 if time.monotonic() > deadline:
                     raise TimeoutError("Server not ready in 600s")
                 time.sleep(2)
-            print(f"READY seqs={args.seqs} tokens={args.tokens}", flush=True)
+            print(f"READY seqs={args.seqs} tokens={args.tokens} policy={args.scheduling_policy}", flush=True)
             sampler = threading.Thread(target=sample, args=(root, stop), daemon=True)
             sampler.start()
             for seed in args.seeds.split(","):
                 subprocess.run([sys.executable, "-m", "slo_bench.measure", "--output", str(root / f"seed-{seed}"),
-                                "--seed", seed, "--requests", str(args.requests), "--rate", str(args.rate)], check=True)
+                                "--seed", seed, "--requests", str(args.requests), "--rate", str(args.rate)]
+                               + args.measure_args.split(), check=True)
         finally:
             stop.set()
             if sampler:

@@ -47,7 +47,23 @@ class StreamMeasurement:
                 "ttft_s": self.first, "tpot_s": (self.last - self.first) / (count - 1) if count > 1 else None}
 
 
+def summarize_offline(records, burst_start, wall_s):
+    """The batch job's view: did it finish, how long did it take, what did it get."""
+    offline = [r for r in records if r.get("class") == "offline"]
+    if not offline:
+        return None
+    valid = [r for r in offline if r["ok"]]
+    finish = [r["submitted_at_s"] + r["e2e_s"] for r in valid]
+    makespan = (max(finish) - burst_start) if finish else None
+    return {"attempted": len(offline), "succeeded": len(valid), "errors": len(offline) - len(valid),
+            "burst_start_s": burst_start, "makespan_s": makespan,
+            "output_tokens_s": (sum(r["completion_tokens"] for r in valid) / makespan) if makespan else None,
+            "p50_e2e_s": float(np.percentile([r["e2e_s"] for r in valid], 50)) if valid else None,
+            "p99_e2e_s": float(np.percentile([r["e2e_s"] for r in valid], 99)) if valid else None}
+
+
 def summarize(records, wall_s, ttft_slo, e2e_slo):
+    records = [r for r in records if r.get("class", "online") == "online"]
     valid = [r for r in records if r["ok"]]
     good = [r for r in valid if r["ttft_s"] <= ttft_slo and r["e2e_s"] <= e2e_slo]
     result = {"attempted": len(records), "succeeded": len(valid), "errors": len(records)-len(valid),
@@ -72,22 +88,32 @@ async def run(args):
                              "measurement_code_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest()}
     (root / "manifest.json").write_text(json.dumps(manifest, indent=2))
     records = []
-    async with httpx.AsyncClient(timeout=args.timeout, limits=httpx.Limits(max_connections=1024)) as client:
-        async def request(index, prompt, scheduled):
+    t0 = time.perf_counter()
+    offline_rng = random.Random(args.seed + 200000)
+    offline_prompts = [[offline_rng.randrange(100, 10000) for _ in range(args.offline_input_tokens)]
+                       for _ in range(args.offline_requests)]
+    async with httpx.AsyncClient(timeout=args.offline_timeout, limits=httpx.Limits(max_connections=1024)) as client:
+        async def request(index, prompt, scheduled, *, cls="online", output_tokens=None,
+                          input_tokens=None, priority=None, timeout=None):
+            output_tokens = output_tokens or args.output_tokens
+            input_tokens = input_tokens or args.input_tokens
             start = time.perf_counter()
-            result = {"index": index, "ok": False, "dispatch_lateness_s": max(0, start-scheduled)}
+            result = {"index": index, "class": cls, "ok": False, "dispatch_lateness_s": max(0, start-scheduled),
+                      "submitted_at_s": start - t0}
             parser = StreamMeasurement()
-            payload = {"model": args.model, "prompt": prompt, "max_tokens": args.output_tokens,
+            payload = {"model": args.model, "prompt": prompt, "max_tokens": output_tokens,
                        "temperature": 0, "seed": args.seed, "ignore_eos": True, "stream": True,
                        "stream_options": {"include_usage": True}}
+            if priority is not None:
+                payload["priority"] = priority   # honoured only with --scheduling-policy priority
             try:
-                async with asyncio.timeout(args.timeout), client.stream("POST", args.base + "/v1/completions", json=payload) as response:
+                async with asyncio.timeout(timeout or args.timeout), client.stream("POST", args.base + "/v1/completions", json=payload) as response:
                     response.raise_for_status()
                     async for line in response.aiter_lines():
                         if line.startswith("data:"):
                             parser.consume(line[5:].strip(), time.perf_counter()-start)
-                result.update(parser.result(args.output_tokens))
-                if result["prompt_tokens"] != args.input_tokens:
+                result.update(parser.result(output_tokens))
+                if result["prompt_tokens"] != input_tokens:
                     raise ValueError("Server prompt token count differs from workload")
                 result["ok"] = True
             except Exception as exc:
@@ -117,19 +143,41 @@ async def run(args):
         for _ in prompts:
             offsets.append(offset)
             offset += arrivals.expovariate(args.rate)
-        async def scheduled_request(index, prompt):
-            scheduled = start + offsets[index]
-            await asyncio.sleep(max(0, scheduled-time.perf_counter()))
-            result = await request(index, prompt, scheduled)
+        t0 = start
+        def keep(result):
             records.append(result)
             with (root / "requests.jsonl").open("a") as out:
                 out.write(json.dumps(result) + "\n")
-        await asyncio.gather(*(scheduled_request(i, p) for i, p in enumerate(prompts)))
+        async def scheduled_request(index, prompt):
+            scheduled = start + offsets[index]
+            await asyncio.sleep(max(0, scheduled-time.perf_counter()))
+            keep(await request(index, prompt, scheduled, priority=args.online_priority))
+        burst_start = None
+        async def offline_burst():
+            nonlocal burst_start
+            await asyncio.sleep(max(0, start + args.offline_at - time.perf_counter()))
+            burst_start = time.perf_counter() - start
+            # A batch job: everything submitted at once, no pacing.
+            results = await asyncio.gather(*(
+                request(10000 + i, p, time.perf_counter(), cls="offline", output_tokens=args.offline_output_tokens,
+                        input_tokens=args.offline_input_tokens, priority=args.offline_priority,
+                        timeout=args.offline_timeout)
+                for i, p in enumerate(offline_prompts)))
+            for r in results:
+                keep(r)
+        tasks = [scheduled_request(i, p) for i, p in enumerate(prompts)]
+        if args.offline_requests:
+            tasks.append(offline_burst())
+        await asyncio.gather(*tasks)
         wall = time.perf_counter()-start
         measured_end_unix = time.time()
         (root / "metrics-after.prom").write_text(await metrics())
     summary = summarize(records, wall, args.ttft_slo, args.e2e_slo)
     summary.update(measured_start_unix=measured_start_unix, measured_end_unix=measured_end_unix)
+    if args.offline_requests:
+        summary["offline"] = summarize_offline(records, burst_start, wall)
+        summary["online_priority"] = args.online_priority
+        summary["offline_priority"] = args.offline_priority
     (root / "summary.json").write_text(json.dumps(summary, indent=2))
     print(json.dumps(summary), flush=True)
 
@@ -149,6 +197,14 @@ def main():
     p.add_argument("--timeout", type=float, default=60)
     p.add_argument("--ttft-slo", type=float, default=1)
     p.add_argument("--e2e-slo", type=float, default=10)
+    # Optional offline burst on top of the online stream (a batch job sharing the GPU).
+    p.add_argument("--offline-requests", type=int, default=0)
+    p.add_argument("--offline-at", type=float, default=5.0, help="seconds after the stream starts")
+    p.add_argument("--offline-input-tokens", type=int, default=1024)
+    p.add_argument("--offline-output-tokens", type=int, default=256)
+    p.add_argument("--offline-timeout", type=float, default=600)
+    p.add_argument("--online-priority", type=int, default=None, help="vLLM priority (lower wins); omitted = not sent")
+    p.add_argument("--offline-priority", type=int, default=None)
     args = p.parse_args()
     if min(args.requests, args.rate, args.input_tokens, args.output_tokens, args.timeout, args.warmup_concurrency) <= 0:
         p.error("counts, rate and timeout must be positive")
