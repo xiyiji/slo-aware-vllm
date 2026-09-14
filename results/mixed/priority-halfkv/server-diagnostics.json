@@ -1,0 +1,5 @@
+{
+  "oom_log_lines": [],
+  "exit_code": 0,
+  "note": "Negative exit code may reflect intentional experiment cleanup, not request failure."
+}
