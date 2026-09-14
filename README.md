@@ -4,7 +4,12 @@
 
 Controlled single-RTX-4090 experiments: select vLLM scheduler settings using latency-constrained goodput, not just peak tokens/s.
 
-**Status: 16 completed runs collected and locally validated, including nine formal runs. Public-service restoration and demo delivery are still in progress.**
+**Status: 16 completed runs collected and locally validated, including nine formal runs. Public nonstream/SSE inference and browser Chat were reverified after service restoration on 2026-09-14 UTC.**
+
+### Application walkthrough
+
+[Download the narrated 95-second demo](https://github.com/xiyiji/slo-aware-vllm/releases/tag/v0.1-evidence).
+It combines actual browser screenshots of Chat, Admin register/promote/load/unload and successful platform CI, with Chinese synthetic narration and subtitles. It is an edited screenshot walkthrough, not continuous screen recording; playback timing is not latency evidence. Admin load/unload changes gateway warm-pool records, not GPU weights. The model answer demonstrates transport/inference, not evaluated answer quality. Screenshots and narration script are in `artifacts/demo/`. GPU availability depends on the rented Pod remaining online.
 
 ## What the measurements showed
 
