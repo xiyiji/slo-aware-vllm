@@ -10,7 +10,7 @@ offline burst of 96 requests of 1024 in / 256 out submitted 5 s in):
   fcfs                vLLM default scheduling, no priorities sent
   priority            --scheduling-policy priority, online priority 0, offline priority 10
   priority-nochunk    priority, chunked prefill disabled
-  priority-halfkv     priority, gpu-memory-utilization 0.45 (about half the KV blocks)
+  priority-halfkv     priority, gpu-memory-utilization 0.77 (weights take 14.3 GiB; this leaves about half the KV of the 0.9 setting)
 
 fcfs and priority get three paired seeds; the two ablation arms one seed each.
 """
@@ -27,7 +27,7 @@ ARMS = {
     "fcfs":             {"policy": "fcfs",     "seeds": "101,102,103", "extra": [], "measure": OFFLINE},
     "priority":         {"policy": "priority", "seeds": "101,102,103", "extra": [], "measure": f"{OFFLINE} {PRIO}"},
     "priority-nochunk": {"policy": "priority", "seeds": "101", "extra": ["--no-chunked-prefill"], "measure": f"{OFFLINE} {PRIO}"},
-    "priority-halfkv":  {"policy": "priority", "seeds": "101", "extra": ["--gpu-memory-utilization", "0.45"], "measure": f"{OFFLINE} {PRIO}"},
+    "priority-halfkv":  {"policy": "priority", "seeds": "101", "extra": ["--gpu-memory-utilization", "0.77"], "measure": f"{OFFLINE} {PRIO}"},
 }
 
 
