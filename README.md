@@ -1,6 +1,10 @@
-# SLO-aware vLLM Scheduling Optimization
+# Tempo
 
-[![Measurement contracts](https://github.com/xiyiji/slo-aware-vllm/actions/workflows/ci.yml/badge.svg)](https://github.com/xiyiji/slo-aware-vllm/actions/workflows/ci.yml)
+### SLO-aware vLLM scheduling, measured on one RTX 4090
+
+(Formerly `slo-aware-vllm`; old links redirect.)
+
+[![Measurement contracts](https://github.com/xiyiji/tempo/actions/workflows/ci.yml/badge.svg)](https://github.com/xiyiji/tempo/actions/workflows/ci.yml)
 
 Controlled single-RTX-4090 experiments: select vLLM scheduler settings using latency-constrained goodput, not just peak tokens/s.
 
@@ -8,7 +12,7 @@ Controlled single-RTX-4090 experiments: select vLLM scheduler settings using lat
 
 ### Application walkthrough
 
-[Download the narrated 95-second demo](https://github.com/xiyiji/slo-aware-vllm/releases/tag/v0.1-evidence).
+[Download the narrated 95-second demo](https://github.com/xiyiji/tempo/releases/tag/v0.1-evidence).
 It combines actual browser screenshots of Chat, Admin register/promote/load/unload and successful platform CI, with Chinese synthetic narration and subtitles. It is an edited screenshot walkthrough, not continuous screen recording; playback timing is not latency evidence. Admin load/unload changes gateway warm-pool records, not GPU weights. The model answer demonstrates transport/inference, not evaluated answer quality. Screenshots and narration script are in `artifacts/demo/`. GPU availability depends on the rented Pod remaining online.
 
 ## What the measurements showed
