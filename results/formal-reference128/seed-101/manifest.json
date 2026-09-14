@@ -1,0 +1,19 @@
+{
+  "base": "http://127.0.0.1:18001",
+  "model": "Qwen/Qwen2.5-7B-Instruct",
+  "output": "results/formal-reference128/seed-101",
+  "requests": 128,
+  "rate": 2.0,
+  "seed": 101,
+  "input_tokens": 256,
+  "output_tokens": 128,
+  "warmup": 3,
+  "warmup_concurrency": 8,
+  "timeout": 60,
+  "ttft_slo": 1,
+  "e2e_slo": 10,
+  "workload_sha256": "4a83cc60ad5901f6c77083c1411b6f43b8af6d3a65b8734927a26931109f1d6a",
+  "started_unix": 1789345534.2209427,
+  "clock": "perf_counter",
+  "measurement_code_sha256": "7a376502a011f51773dc68d992c295bf460b5e3b44959d77510c2de952d1b706"
+}

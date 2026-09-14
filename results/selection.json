@@ -1,0 +1,15 @@
+{
+  "seqs": 8,
+  "tokens": 2048,
+  "goodput": 2.0116406396977657,
+  "errors": 0,
+  "source": "results/budget-s8-t2048/seed-17/summary.json",
+  "formal_seeds": [
+    101,
+    102,
+    103
+  ],
+  "formal_requests": 128,
+  "selection_rule": "zero errors; within 5% of max goodput; prefer smaller seqs then budget",
+  "order": "three baseline, three selected, three sequence-limit-128 reference runs; grouped to limit rented-GPU startup cost"
+}

@@ -4,7 +4,15 @@
 
 Controlled single-RTX-4090 experiments: select vLLM scheduler settings using latency-constrained goodput, not just peak tokens/s.
 
-**Status: implementation and experiments in progress. No improvement claim yet.**
+**Status: 16 completed runs collected and locally validated, including nine formal runs. Public-service restoration and demo delivery are still in progress.**
+
+## What the measurements showed
+
+The screening-selected setting (8 sequences, 2048-token budget) did **not** improve on the existing-style 128-sequence / 4096-token reference. Across three paired-seed runs, mean output throughput was effectively equal (265.41 versus 265.38 tokens/s), while selected mean goodput was lower (1.999 versus 2.073 requests/s). In seed103, selected p95 TTFT reached1.464s versus0.076s for the reference. Retain the128 reference for this tested workload; the screening choice is not a validated upgrade.
+
+The deliberately serial sequence-limit1 reference averaged40.47 tokens/s with270 timeouts across384 attempts. This is evidence of overload under the offered workload, not a fair basis for claiming a555% improvement over the original batched application. Results describe successful outputs during a deadline-limited run, not unrestricted engine capacity.
+
+Read the [per-run tables and comparison plot](results/REPORT.md), [formal aggregates](results/formal-aggregates.json), and [frozen screening selection](results/selection.json). Raw request records, telemetry and manifests accompany each run. These scheduler experiments do not fulfill the separate InferenceGateway SPEC's HF-versus-vLLM concurrency1/4/16 comparison.
 
 - [完整中文设计文档](docs/DESIGN.zh-CN.md)
 - [English design and measurement contract](docs/DESIGN.md)
